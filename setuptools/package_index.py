@@ -788,6 +788,30 @@ class PackageIndex(Environment):
     def _download_url(self, url, tmpdir):
         # Determine download filename
         #
+        filename = self._resolve_download_filename(url, tmpdir)
+
+        # Download the file
+        #
+        return self._download_vcs(url, filename) or self._download_other(url, filename)
+
+    @staticmethod
+    def _resolve_download_filename(url, tmpdir):
+        """
+        >>> import pathlib
+        >>> du = PackageIndex._resolve_download_filename
+        >>> root = getfixture('tmp_path')
+        >>> url = 'https://www.example.com/path/setuptools-1.1.0.tar.gz'
+        >>> str(pathlib.Path(du(url, root)).relative_to(root))
+        'setuptools-1.1.0.tar.gz'
+
+        Ensures the target is always in tmpdir.
+
+        >>> url = 'https://anyhost/%2fhome%2fuser%2f.ssh%2fauthorized_keys'
+        >>> du(url, root)
+        Traceback (most recent call last):
+        ...
+        ValueError: Invalid filename...
+        """
         name, fragment = egg_info_for_url(url)
         if name:
             while '..' in name:
@@ -800,9 +824,11 @@ class PackageIndex(Environment):
 
         filename = os.path.join(tmpdir, name)
 
-        # Download the file
-        #
-        return self._download_vcs(url, filename) or self._download_other(url, filename)
+        # ensure path resolves within the tmpdir
+        if not filename.startswith(str(tmpdir)):
+            raise ValueError(f"Invalid filename {filename}")
+
+        return filename
 
     @staticmethod
     def _resolve_vcs(url):

@@ -246,6 +246,33 @@ class TestPackageIndex:
         with pytest.warns(UserWarning):
             index.download(url, tmp_path)
 
+    def test_resolve_download_filename_prevents_path_traversal(self, tmpdir):
+        """
+        Test that _resolve_download_filename prevents path traversal attacks.
+        CVE-2025-47273
+        """
+        # Test with URL-encoded absolute path - should raise ValueError
+        url = 'https://anyhost/%2fhome%2fuser%2f.ssh%2fauthorized_keys'
+        with pytest.raises(ValueError, match="Invalid filename"):
+            setuptools.package_index.PackageIndex._resolve_download_filename(
+                url, str(tmpdir)
+            )
+
+        # Test with another path traversal attempt
+        url = 'https://anyhost/%2fetc%2fpasswd'
+        with pytest.raises(ValueError, match="Invalid filename"):
+            setuptools.package_index.PackageIndex._resolve_download_filename(
+                url, str(tmpdir)
+            )
+
+        # Test that normal filenames still work
+        url = 'https://files.pythonhosted.org/packages/setuptools-78.1.0.tar.gz'
+        result = setuptools.package_index.PackageIndex._resolve_download_filename(
+            url, str(tmpdir)
+        )
+        assert result.startswith(str(tmpdir))
+        assert 'setuptools-78.1.0.tar.gz' in result
+
 
 class TestContentCheckers:
     def test_md5(self):
